@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { UserRole } from '../../types/auth';
-import { User, Stethoscope, Shield, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { User, Stethoscope, Shield, Eye, EyeOff, AlertCircle, UserPlus } from 'lucide-react';
 
 export default function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
   
-  const { login } = useAuth();
+  const { login, signUp } = useAuth();
 
   const roles = [
     {
@@ -47,13 +49,22 @@ export default function LoginForm() {
       return;
     }
 
+    if (isSignUp && !fullName.trim()) {
+      setError('Please enter your full name');
+      return;
+    }
+
     setIsLoading(true);
     setError('');
 
     try {
-      await login(email, password, selectedRole);
+      if (isSignUp) {
+        await signUp(email, password, fullName, selectedRole);
+      } else {
+        await login(email, password, selectedRole);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setError(err instanceof Error ? err.message : `${isSignUp ? 'Sign up' : 'Login'} failed`);
     } finally {
       setIsLoading(false);
     }
@@ -65,7 +76,21 @@ export default function LoginForm() {
       setEmail(roleData.demoEmail);
       setPassword('demo123');
       setSelectedRole(role);
+      setIsSignUp(false); // Switch to login mode for demo
     }
+  };
+
+  const resetForm = () => {
+    setEmail('');
+    setPassword('');
+    setFullName('');
+    setSelectedRole(null);
+    setError('');
+  };
+
+  const toggleMode = () => {
+    setIsSignUp(!isSignUp);
+    resetForm();
   };
 
   return (
@@ -80,7 +105,36 @@ export default function LoginForm() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Sign In</h2>
+          <div className="flex items-center justify-center mb-6">
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                type="button"
+                onClick={() => !isSignUp && toggleMode()}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
+                  !isSignUp
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => isSignUp && toggleMode()}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
+                  isSignUp
+                    ? 'bg-white text-green-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Sign Up
+              </button>
+            </div>
+          </div>
+
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">
+            {isSignUp ? 'Create Account' : 'Welcome Back'}
+          </h2>
 
           {/* Role Selection */}
           <div className="mb-6">
@@ -106,16 +160,18 @@ export default function LoginForm() {
                       <div className="flex-1">
                         <h3 className="font-semibold text-gray-900">{role.name}</h3>
                         <p className="text-sm text-gray-600 mt-1">{role.description}</p>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            fillDemoCredentials(role.id);
-                          }}
-                          className="text-xs text-blue-600 hover:text-blue-700 mt-2"
-                        >
-                          Use demo credentials
-                        </button>
+                        {!isSignUp && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              fillDemoCredentials(role.id);
+                            }}
+                            className="text-xs text-blue-600 hover:text-blue-700 mt-2"
+                          >
+                            Use demo credentials
+                          </button>
+                        )}
                       </div>
                     </div>
                   </button>
@@ -125,6 +181,23 @@ export default function LoginForm() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {isSignUp && (
+              <div>
+                <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
+                  Full Name
+                </label>
+                <input
+                  id="fullName"
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter your full name"
+                  required={isSignUp}
+                />
+              </div>
+            )}
+
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                 Email Address
@@ -153,6 +226,7 @@ export default function LoginForm() {
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-12"
                   placeholder="Enter your password"
                   required
+                  minLength={6}
                 />
                 <button
                   type="button"
@@ -162,6 +236,9 @@ export default function LoginForm() {
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
+              {isSignUp && (
+                <p className="text-xs text-gray-500 mt-1">Password must be at least 6 characters long</p>
+              )}
             </div>
 
             {error && (
@@ -179,15 +256,30 @@ export default function LoginForm() {
               {isLoading ? (
                 <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
               ) : (
-                'Sign In'
+                <>
+                  {isSignUp ? <UserPlus className="h-4 w-4 mr-2" /> : null}
+                  {isSignUp ? 'Create Account' : 'Sign In'}
+                </>
               )}
             </button>
           </form>
 
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600">
-              Demo credentials are pre-filled when you select a role
+              {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+              <button
+                type="button"
+                onClick={toggleMode}
+                className="text-blue-600 hover:text-blue-700 font-medium"
+              >
+                {isSignUp ? 'Sign in here' : 'Sign up here'}
+              </button>
             </p>
+            {!isSignUp && (
+              <p className="text-xs text-gray-500 mt-2">
+                Demo credentials are pre-filled when you select a role
+              </p>
+            )}
           </div>
         </div>
       </div>
